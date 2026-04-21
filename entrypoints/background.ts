@@ -1,4 +1,4 @@
-import { saveConfig } from '@/services/config';
+import { saveConfig, updateConfigFromSubscription } from '@/services/config';
 
 export default defineBackground(() => {
   console.log('Hello background!', { id: browser.runtime.id });
@@ -6,11 +6,19 @@ export default defineBackground(() => {
   // 监听扩展安装或更新事件
   browser.runtime.onInstalled.addListener(() => {
     console.log('Extension installed or updated');
+    // 安装/更新时触发订阅更新
+    updateConfigFromSubscription().catch(error => {
+      console.error('安装时订阅更新失败:', error);
+    });
   });
 
   // 监听扩展启动事件
   browser.runtime.onStartup.addListener(() => {
     console.log('Extension started');
+    // 浏览器启动时触发订阅更新
+    updateConfigFromSubscription().catch(error => {
+      console.error('启动时订阅更新失败:', error);
+    });
   });
 
   // 监听来自 popup 的消息
@@ -37,6 +45,14 @@ export default defineBackground(() => {
     // 打开页面并填充输入框
     if (message.action === 'openAndFillInput') {
       handleOpenAndFillInput(message.url, message.content).then(sendResponse);
+      return true; // 保持消息通道开放以支持异步响应
+    }
+
+    // 更新订阅配置
+    if (message.action === 'updateSubscription') {
+      updateConfigFromSubscription()
+        .then(success => sendResponse({ success, error: null }))
+        .catch(error => sendResponse({ success: false, error: (error as Error).message }));
       return true; // 保持消息通道开放以支持异步响应
     }
   });

@@ -17,6 +17,10 @@ export interface ExtensionConfig {
   wegent_api_key?: string;
   /** API 密钥是否已加密（用于兼容旧版数据） */
   wegent_api_key_encrypted?: boolean;
+  /** AI Mix 配置订阅 URL */
+  ai_mix_subscription_url?: string;
+  /** AI Mix 订阅配置上次更新时间戳 */
+  ai_mix_subscription_last_updated?: number;
 }
 
 /**
@@ -314,6 +318,78 @@ export async function resetAIMixConfig(): Promise<void> {
     await browser.storage.local.remove(AI_MIX_CONFIG_KEY);
   } catch (error) {
     console.error('重置 AI Mix 配置失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 从订阅 URL 获取远程配置
+ * @param url 订阅 URL
+ * @returns 远程 AI Mix 配置
+ */
+export async function fetchSubscriptionConfig(url: string): Promise<AIMixConfig> {
+  // 仅允许 HTTPS 协议
+  if (!url.startsWith('https://')) {
+    throw new Error('订阅 URL 必须使用 HTTPS 协议');
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`获取订阅配置失败: HTTP ${response.status}`);
+    }
+
+    const config = await response.json() as AIMixConfig;
+
+    // 基础校验：确保配置包含必要的字段
+    if (!config.dingTalk?.actions || !config.gitLab?.actions || !config.jira?.actions) {
+      throw new Error('订阅配置格式不正确，缺少必要字段');
+    }
+
+    return config;
+  } catch (error) {
+    console.error('获取订阅配置失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 从订阅 URL 更新 AI Mix 配置
+ * @returns 是否成功更新
+ */
+export async function updateConfigFromSubscription(): Promise<boolean> {
+  try {
+    const config = await getConfig();
+
+    if (!config.ai_mix_subscription_url) {
+      console.log('未配置订阅 URL，跳过更新');
+      return false;
+    }
+
+    const remoteConfig = await fetchSubscriptionConfig(config.ai_mix_subscription_url);
+
+    // 保存远程配置（完全替换本地配置）
+    await saveAIMixConfig({
+      dingTalk: { actions: remoteConfig.dingTalk.actions },
+      gitLab: { actions: remoteConfig.gitLab.actions },
+      jira: { actions: remoteConfig.jira.actions },
+    });
+
+    // 更新上次更新时间戳
+    await saveConfig({
+      ai_mix_subscription_last_updated: Date.now(),
+    });
+
+    console.log('AI Mix 配置已从订阅 URL 更新');
+    return true;
+  } catch (error) {
+    console.error('从订阅 URL 更新配置失败:', error);
     throw error;
   }
 }

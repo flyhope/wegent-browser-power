@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import {
   NCard,
   NForm,
@@ -12,6 +12,8 @@ import {
   NDivider,
   NRadioGroup,
   NRadio,
+  NSwitch,
+  NTag,
   useMessage,
 } from 'naive-ui';
 import { getConfig, saveConfig } from '@/services/config';
@@ -20,6 +22,7 @@ import {
   importAIMixConfig,
   resetAIMixConfig,
   loadDefaultAIMixConfig,
+  updateConfigFromSubscription,
   type AIMixConfig,
 } from '@/services/config';
 
@@ -34,12 +37,19 @@ const configMessage = ref('');
 const aiMixJson = ref('');
 const importMode = ref<'merge' | 'replace'>('merge');
 
+// 订阅配置
+const subscriptionUrl = ref('');
+const subscriptionLastUpdated = ref<number | undefined>(undefined);
+const isSubscribed = computed(() => !!subscriptionUrl.value);
+
 // 加载配置
 const loadConfig = async () => {
   // 加载原有配置
   const config = await getConfig();
   url.value = config.wegent_url || '';
   apiKey.value = config.wegent_api_key || '';
+  subscriptionUrl.value = config.ai_mix_subscription_url || '';
+  subscriptionLastUpdated.value = config.ai_mix_subscription_last_updated;
 
   // 加载 AI Mix 配置（优先本地存储，无则加载默认配置）
   const aiMixConfig = await getAIMixConfig();
@@ -56,9 +66,21 @@ const handleSubmit = async () => {
   try {
     await saveConfig({
       wegent_url: url.value,
-      wegent_api_key: apiKey.value
+      wegent_api_key: apiKey.value,
+      ai_mix_subscription_url: subscriptionUrl.value || undefined,
     });
     configMessage.value = '保存成功';
+
+    // 如果有订阅 URL，触发订阅更新
+    if (subscriptionUrl.value) {
+      try {
+        await updateConfigFromSubscription();
+        message.success('订阅配置已更新');
+        await loadConfig();
+      } catch (subError) {
+        message.error('订阅更新失败: ' + subError);
+      }
+    }
 
     url.value = '';
     apiKey.value = '';
@@ -122,6 +144,15 @@ onMounted(loadConfig);
               />
             </NFormItem>
 
+            <NFormItem label="订阅 URL">
+              <NInput
+                v-model:value="subscriptionUrl"
+                placeholder="https://example.com/ai-mix-config.json"
+                size="large"
+                clearable
+              />
+            </NFormItem>
+
             <NButton
               type="primary"
               size="large"
@@ -142,10 +173,22 @@ onMounted(loadConfig);
         <NDivider />
 
         <!-- AI Mix 配置管理 -->
-        <NText strong>AI Mix 配置管理</NText>
+        <NSpace align="center">
+          <NText strong>AI Mix 配置管理</NText>
+          <NTag v-if="isSubscribed" type="info">订阅模式</NTag>
+        </NSpace>
 
         <NSpace vertical :size="16">
-          <NRadioGroup v-model:value="importMode">
+          <NAlert v-if="isSubscribed" type="info" :show-icon="false">
+            <NSpace vertical>
+              <span>当前配置由订阅 URL 管理，无法手动编辑</span>
+              <span v-if="subscriptionLastUpdated">
+                上次更新: {{ new Date(subscriptionLastUpdated).toLocaleString() }}
+              </span>
+            </NSpace>
+          </NAlert>
+
+          <NRadioGroup v-if="!isSubscribed" v-model:value="importMode">
             <NSpace>
               <NRadio value="merge">合并（不影响其他配置）</NRadio>
               <NRadio value="replace">替换（完全覆盖）</NRadio>
@@ -160,10 +203,11 @@ onMounted(loadConfig);
               :rows="20"
               placeholder="AI Mix 配置 JSON"
               style="font-family: monospace;"
+              :disabled="isSubscribed"
             />
           </NFormItem>
 
-          <NSpace>
+          <NSpace v-if="!isSubscribed">
             <NButton type="primary" @click="handleImport">保存</NButton>
             <NButton type="error" @click="handleReset">重置为默认</NButton>
           </NSpace>
