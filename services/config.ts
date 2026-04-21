@@ -328,9 +328,9 @@ export async function resetAIMixConfig(): Promise<void> {
  * @returns 远程 AI Mix 配置
  */
 export async function fetchSubscriptionConfig(url: string): Promise<AIMixConfig> {
-  // 仅允许 HTTPS 协议
-  if (!url.startsWith('https://')) {
-    throw new Error('订阅 URL 必须使用 HTTPS 协议');
+  // 仅允许 HTTP 或 HTTPS 协议
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    throw new Error('订阅 URL 必须使用 HTTP 或 HTTPS 协议');
   }
 
   try {
