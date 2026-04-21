@@ -323,7 +323,7 @@ export async function resetAIMixConfig(): Promise<void> {
 }
 
 /**
- * 从订阅 URL 获取远程配置
+ * 从订阅 URL 获取远程配置（通过 background 脚本执行，解决 CORS 问题）
  * @param url 订阅 URL
  * @returns 远程 AI Mix 配置
  */
@@ -334,25 +334,17 @@ export async function fetchSubscriptionConfig(url: string): Promise<AIMixConfig>
   }
 
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+    // 通过 background 脚本发送请求，避免 CORS 限制
+    const response = await browser.runtime.sendMessage({
+      action: 'fetchSubscription',
+      url,
+    }) as { success: boolean; config?: AIMixConfig; error?: string };
 
-    if (!response.ok) {
-      throw new Error(`获取订阅配置失败: HTTP ${response.status}`);
+    if (!response.success) {
+      throw new Error(response.error || '获取订阅配置失败');
     }
 
-    const config = await response.json() as AIMixConfig;
-
-    // 基础校验：确保配置包含必要的字段
-    if (!config.dingTalk?.actions || !config.gitLab?.actions || !config.jira?.actions) {
-      throw new Error('订阅配置格式不正确，缺少必要字段');
-    }
-
-    return config;
+    return response.config!;
   } catch (error) {
     console.error('获取订阅配置失败:', error);
     throw error;
