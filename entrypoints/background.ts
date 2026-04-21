@@ -1,4 +1,4 @@
-import { saveConfig, updateConfigFromSubscription, type AIMixConfig } from '@/services/config';
+import { saveConfig, updateConfigFromSubscription, doFetchSubscription, type AIMixConfig } from '@/services/config';
 
 export default defineBackground(() => {
   console.log('Hello background!', { id: browser.runtime.id });
@@ -571,29 +571,6 @@ export default defineBackground(() => {
 
   // 处理获取订阅配置（在 background 中执行以解决 CORS 问题）
   async function handleFetchSubscription(url: string): Promise<AIMixConfig> {
-    // 仅允许 HTTP 或 HTTPS 协议
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      throw new Error('订阅 URL 必须使用 HTTP 或 HTTPS 协议');
-    }
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`获取订阅配置失败: HTTP ${response.status}`);
-    }
-
-    const config = await response.json() as AIMixConfig;
-
-    // 基础校验：确保配置包含必要的字段
-    if (!config.dingTalk?.actions || !config.gitLab?.actions || !config.jira?.actions) {
-      throw new Error('订阅配置格式不正确，缺少必要字段');
-    }
-
-    return config;
+    return doFetchSubscription(url);
   }
 });

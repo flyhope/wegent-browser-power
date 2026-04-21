@@ -323,7 +323,35 @@ export async function resetAIMixConfig(): Promise<void> {
 }
 
 /**
+ * 内部函数：直接执行 fetch 获取订阅配置（供 background 脚本使用）
+ * @param url 订阅 URL
+ * @returns 远程 AI Mix 配置
+ */
+export async function doFetchSubscription(url: string): Promise<AIMixConfig> {
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`获取订阅配置失败: HTTP ${response.status}`);
+  }
+
+  const config = await response.json() as AIMixConfig;
+
+  // 基础校验：确保配置包含必要的字段
+  if (!config.dingTalk?.actions || !config.gitLab?.actions || !config.jira?.actions) {
+    throw new Error('订阅配置格式不正确，缺少必要字段');
+  }
+
+  return config;
+}
+
+/**
  * 从订阅 URL 获取远程配置（通过 background 脚本执行，解决 CORS 问题）
+ * 此函数供非 background 上下文调用
  * @param url 订阅 URL
  * @returns 远程 AI Mix 配置
  */
@@ -364,7 +392,7 @@ export async function updateConfigFromSubscription(): Promise<boolean> {
       return false;
     }
 
-    const remoteConfig = await fetchSubscriptionConfig(config.ai_mix_subscription_url);
+    const remoteConfig = await doFetchSubscription(config.ai_mix_subscription_url);
 
     // 保存远程配置（完全替换本地配置）
     await saveAIMixConfig({
