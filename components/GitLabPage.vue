@@ -53,8 +53,10 @@ const getMrDetails = async (projectPath: string, mrIid: string) => {
   return await gitlabApi.service.getMergeRequestDetails(projectPath, mrIid);
 };
 
-// 动态获取 AI Review 配置（仅返回动态 tools）
-const getAiReviewDynamicConfig = async () => {
+// 动态获取 code bot 配置（返回携带 workspace 的 wegent_code_bot tool）
+// AIAction.vue 的 mergeTools 会先删除 base 中已有的 wegent_code_bot，再追加此处返回的新条目，
+// 其余 tools（如 skill、mcp 等）原样保留
+const getCodeBotDynamicConfig = async () => {
   // 1. 解析当前 MR URL
   const cleanedUrl = cleanMrUrl(currentUrl.value);
   const parsed = parseMergeRequestUrl(cleanedUrl);
@@ -111,16 +113,13 @@ const loadAIMixConfig = async () => {
   try {
     const config = await getAIMixConfig();
 
-    // 为 GitLab 配置注入动态 getAiConfig 方法
-    aiMixActions.value = config.gitLab.actions.map(action => {
-      if (action.buttonLabel === 'AI协助Review') {
-        return {
-          ...action,
-          getAiConfig: getAiReviewDynamicConfig,
-        };
-      }
-      return action;
-    });
+    // 所有 GitLab actions 统一注入 getCodeBotDynamicConfig：
+    // wegent_code_bot 始终以携带 workspace 的最新版本为准（强制替换已有条目或直接追加），
+    // 其他 tools（skill、mcp 等）由 AIAction.vue 的 mergeTools 原样保留
+    aiMixActions.value = config.gitLab.actions.map(action => ({
+      ...action,
+      getAiConfig: getCodeBotDynamicConfig,
+    }));
   } catch (error) {
     console.error('加载 AI Mix 配置失败:', error);
     aiMixActions.value = [];
