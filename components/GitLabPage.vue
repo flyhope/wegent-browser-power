@@ -53,8 +53,8 @@ const getMrDetails = async (projectPath: string, mrIid: string) => {
   return await gitlabApi.service.getMergeRequestDetails(projectPath, mrIid);
 };
 
-// 动态获取 AI Review 配置（仅返回动态 tools）
-const getAiReviewDynamicConfig = async () => {
+// 动态获取 code bot 配置（仅返回动态 tools，包含 wegent_code_bot 和 workspace）
+const getCodeBotDynamicConfig = async () => {
   // 1. 解析当前 MR URL
   const cleanedUrl = cleanMrUrl(currentUrl.value);
   const parsed = parseMergeRequestUrl(cleanedUrl);
@@ -111,12 +111,17 @@ const loadAIMixConfig = async () => {
   try {
     const config = await getAIMixConfig();
 
-    // 为 GitLab 配置注入动态 getAiConfig 方法
+    // 为所有 GitLab actions 统一注入动态 getAiConfig（编码模式）
+    // 规则：若 action 未显式配置 tools，或 tools 中包含 wegent_code_bot，则注入
+    // 例外：action 已显式配置了不含 wegent_code_bot 的 tools，则保持原样（尊重用户配置）
     aiMixActions.value = config.gitLab.actions.map(action => {
-      if (action.buttonLabel === 'AI协助Review') {
+      const hasExplicitTools = action.aiConfig?.tools && action.aiConfig.tools.length > 0;
+      const hasCodeBot = action.aiConfig?.tools?.some(t => t.type === 'wegent_code_bot');
+
+      if (!hasExplicitTools || hasCodeBot) {
         return {
           ...action,
-          getAiConfig: getAiReviewDynamicConfig,
+          getAiConfig: getCodeBotDynamicConfig,
         };
       }
       return action;
