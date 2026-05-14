@@ -36,15 +36,36 @@ const renderedPrompt = ref('');
 const resolvedAiConfig = ref<AiConfig | null>(null);
 
 /**
+ * 合并 tools 数组：
+ * - 先从 base 中删除与 override 同 type 的条目（强制替换，不保留旧配置）
+ * - 再将 override 条目追加到末尾
+ * - base 中其余 type 原样保留
+ *
+ * 示例：
+ *   base:     [{ type: 'skill', ... }, { type: 'wegent_code_bot' }]
+ *   override: [{ type: 'wegent_code_bot', workspace: {...} }]
+ *   result:   [{ type: 'skill', ... }, { type: 'wegent_code_bot', workspace: {...} }]
+ */
+const mergeTools = (base: ToolConfig[], override: ToolConfig[]): ToolConfig[] => {
+  if (override.length === 0) return base;
+
+  const overrideTypes = new Set(override.map(t => t.type));
+  // 移除 base 中已被 override 覆盖的同类型条目
+  const filtered = base.filter(t => !overrideTypes.has(t.type));
+  // 将 override 条目追加到末尾
+  return [...filtered, ...override];
+};
+
+/**
  * 合并两个 AI 配置
  * - getAiConfig 返回的配置优先级更高
- * - tools 数组进行合并
+ * - tools 数组：override 同类型条目强制替换 base 中的，其余保留
  */
 const mergeAiConfig = (base: AiConfig, override: Partial<AiConfig>): AiConfig => {
   return {
     promptTemplate: override.promptTemplate ?? base.promptTemplate,
     model: override.model ?? base.model,
-    tools: [...(base.tools || []), ...(override.tools || [])],
+    tools: mergeTools(base.tools || [], override.tools || []),
   };
 };
 
