@@ -50,12 +50,27 @@ export type { ToolConfig };
 
 /**
  * AI Mix 配置接口
+ * - `gitLab` 仅作为旧数据回退/旧 UI 兼容读取来源，不再写入新数据
+ * - `gitLabMR` 与 `gitLab` 在 `getAIMixConfig` 返回值中保持镜像（`gitLab.actions === gitLabMR.actions`）
  */
 export interface AIMixConfig {
   dingTalk: {
     actions: AIMixActionItem[];
   };
+  /** 兼容旧数据/旧 UI（值镜像自 gitLabMR） */
   gitLab: {
+    actions: AIMixActionItem[];
+  };
+  gitLabMR: {
+    actions: AIMixActionItem[];
+  };
+  gitLabTestReport: {
+    actions: AIMixActionItem[];
+  };
+  gitLabIssues: {
+    actions: AIMixActionItem[];
+  };
+  gitLabPipelines: {
     actions: AIMixActionItem[];
   };
   jira: {
@@ -65,12 +80,25 @@ export interface AIMixConfig {
 
 /**
  * AI Mix 存储配置接口（部分可选）
+ * - `gitLab` 保留为旧数据回退来源
  */
 export interface AIMixStorageConfig {
   dingTalk?: {
     actions?: AIMixActionItem[];
   };
   gitLab?: {
+    actions?: AIMixActionItem[];
+  };
+  gitLabMR?: {
+    actions?: AIMixActionItem[];
+  };
+  gitLabTestReport?: {
+    actions?: AIMixActionItem[];
+  };
+  gitLabIssues?: {
+    actions?: AIMixActionItem[];
+  };
+  gitLabPipelines?: {
     actions?: AIMixActionItem[];
   };
   jira?: {
@@ -231,6 +259,10 @@ export async function loadDefaultAIMixConfig(): Promise<AIMixConfig> {
 
 /**
  * 获取 AI Mix 配置（优先本地存储，无则加载默认配置）
+ *
+ * 兼容策略：
+ * - 读取 MR 配置时优先 `gitLabMR`，回退旧 `gitLab`
+ * - 返回值始终包含 `gitLab`（值镜像自 `gitLabMR`），保证 OptionsPage 等旧 UI 不报错
  */
 export async function getAIMixConfig(): Promise<AIMixConfig> {
   try {
@@ -243,12 +275,31 @@ export async function getAIMixConfig(): Promise<AIMixConfig> {
       const stored = data[AI_MIX_CONFIG_KEY]!;
       // 合并确保结构完整（本地存储可能只有部分配置）
       const defaultConfig = await loadDefaultAIMixConfig();
+
+      // MR 优先 gitLabMR，回退旧 gitLab 数据
+      const gitLabMRActions = stored.gitLabMR?.actions
+        ?? stored.gitLab?.actions
+        ?? defaultConfig.gitLabMR.actions;
+
       return {
         dingTalk: {
           actions: stored.dingTalk?.actions || defaultConfig.dingTalk.actions,
         },
+        // 镜像，供旧 UI 读取
         gitLab: {
-          actions: stored.gitLab?.actions || defaultConfig.gitLab.actions,
+          actions: gitLabMRActions,
+        },
+        gitLabMR: {
+          actions: gitLabMRActions,
+        },
+        gitLabTestReport: {
+          actions: stored.gitLabTestReport?.actions || defaultConfig.gitLabTestReport.actions,
+        },
+        gitLabIssues: {
+          actions: stored.gitLabIssues?.actions || defaultConfig.gitLabIssues.actions,
+        },
+        gitLabPipelines: {
+          actions: stored.gitLabPipelines?.actions || defaultConfig.gitLabPipelines.actions,
         },
         jira: {
           actions: stored.jira?.actions || defaultConfig.jira.actions,
@@ -288,16 +339,30 @@ export async function exportAIMixConfig(): Promise<AIMixConfig> {
  * 导入 AI Mix 配置
  * @param config 导入的配置
  * @param options 导入选项
+ *   - `importGitLab`：兼容入口，导入时若仅提供 `gitLab` 则映射到 `gitLabMR`；若同时提供两者以 `gitLabMR` 为准
+ *   - `importGitLabMR` / `importGitLabTestReport` / `importGitLabIssues` / `importGitLabPipelines`：分别控制四种 GitLab 类型
  */
 export async function importAIMixConfig(
   config: Partial<AIMixConfig>,
   options: {
     importDingTalk?: boolean;
     importGitLab?: boolean;
+    importGitLabMR?: boolean;
+    importGitLabTestReport?: boolean;
+    importGitLabIssues?: boolean;
+    importGitLabPipelines?: boolean;
     merge?: boolean;
   } = {}
 ): Promise<void> {
-  const { importDingTalk = true, importGitLab = true, merge = true } = options;
+  const {
+    importDingTalk = true,
+    importGitLab = true,
+    importGitLabMR = true,
+    importGitLabTestReport = true,
+    importGitLabIssues = true,
+    importGitLabPipelines = true,
+    merge = true,
+  } = options;
 
   try {
     let newConfig: AIMixStorageConfig = {};
@@ -316,9 +381,29 @@ export async function importAIMixConfig(
       };
     }
 
-    if (importGitLab && config.gitLab?.actions) {
-      newConfig.gitLab = {
-        actions: config.gitLab.actions,
+    // GitLab MR：优先取 gitLabMR，回退 gitLab（兼容旧导入数据）
+    if (importGitLab || importGitLabMR) {
+      const mrActions = config.gitLabMR?.actions ?? config.gitLab?.actions;
+      if (mrActions) {
+        newConfig.gitLabMR = { actions: mrActions };
+      }
+    }
+
+    if (importGitLabTestReport && config.gitLabTestReport?.actions) {
+      newConfig.gitLabTestReport = {
+        actions: config.gitLabTestReport.actions,
+      };
+    }
+
+    if (importGitLabIssues && config.gitLabIssues?.actions) {
+      newConfig.gitLabIssues = {
+        actions: config.gitLabIssues.actions,
+      };
+    }
+
+    if (importGitLabPipelines && config.gitLabPipelines?.actions) {
+      newConfig.gitLabPipelines = {
+        actions: config.gitLabPipelines.actions,
       };
     }
 
@@ -375,11 +460,20 @@ export async function saveSubscriptionUrl(url: string): Promise<void> {
 
 /**
  * 将从订阅 URL 获取到的数据写入 AI Mix 配置（完整替换）
+ *
+ * 写入策略：
+ * - 只写四个新键 + dingTalk + jira，不再写 `gitLab`
+ * - 订阅源若同时提供 `gitLabMR` 与 `gitLab`，仅以 `gitLabMR` 为准
+ * - 若仅提供 `gitLab`（旧订阅源），映射到 `gitLabMR`
  */
 export async function applySubscriptionData(data: AIMixConfig): Promise<void> {
   const config: AIMixStorageConfig = {};
   if (data.dingTalk?.actions) config.dingTalk = { actions: data.dingTalk.actions };
-  if (data.gitLab?.actions) config.gitLab = { actions: data.gitLab.actions };
+  const mrActions = data.gitLabMR?.actions ?? data.gitLab?.actions;
+  if (mrActions) config.gitLabMR = { actions: mrActions };
+  if (data.gitLabTestReport?.actions) config.gitLabTestReport = { actions: data.gitLabTestReport.actions };
+  if (data.gitLabIssues?.actions) config.gitLabIssues = { actions: data.gitLabIssues.actions };
+  if (data.gitLabPipelines?.actions) config.gitLabPipelines = { actions: data.gitLabPipelines.actions };
   if (data.jira?.actions) config.jira = { actions: data.jira.actions };
   await saveAIMixConfig(config);
 }

@@ -89,8 +89,11 @@ const fetchSubscription = async (subUrl: string): Promise<boolean> => {
     }
     const data = (await response.json()) as AIMixConfig;
     // 简单校验：至少包含一个已知平台字段
-    if (!data || (!data.dingTalk && !data.gitLab && !data.jira)) {
-      throw new Error('订阅数据格式错误：缺少 dingTalk / gitLab / jira 字段');
+    if (!data || (!data.dingTalk
+      && !data.gitLab && !data.gitLabMR
+      && !data.gitLabTestReport && !data.gitLabIssues && !data.gitLabPipelines
+      && !data.jira)) {
+      throw new Error('订阅数据格式错误：缺少 dingTalk / gitLab / gitLabMR / gitLabTestReport / gitLabIssues / gitLabPipelines / jira 字段');
     }
     await applySubscriptionData(data);
     subscriptionStatus.value = 'success';
