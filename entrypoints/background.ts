@@ -449,33 +449,35 @@ export default defineBackground(() => {
   }
 
   // 辅助函数：等待并填充消息输入框
+  // 与 1.0.22 保持一致：定位 [data-testid="message-input"]，innerText 写入，
+  // 延迟 1s 后派发 input 事件通知 React 更新内部 state
   async function waitForAndFillMessageInput(tabId: number, text: string, maxAttempts = 30) {
     console.log('开始等待消息输入框出现');
-    
+
     for (let i = 0; i < maxAttempts; i++) {
       try {
         console.log(`第 ${i + 1} 次尝试查找并填充输入框...`);
-        
+
         const [result] = await browser.scripting.executeScript({
           target: { tabId },
           func: (content: string) => {
             try {
               // 查找输入框元素
               const inputEl = document.querySelector('[data-testid="message-input"]');
-              
+
               if (!inputEl) {
                 console.log('未找到输入框');
                 return false;
               }
-              
+
               console.log('找到输入框，开始填充内容');
-              
+
               // 聚焦输入框
               (inputEl as HTMLElement).focus();
-              
+
               // 修改内容
               (inputEl as HTMLElement).innerText = content;
-              
+
               // 使用 setTimeout 确保渲染完成后再触发 input 事件
               setTimeout(() => {
                 // 触发 input 事件通知 React 更新内部 state
@@ -483,7 +485,7 @@ export default defineBackground(() => {
                 inputEl.dispatchEvent(inputEvent);
                 console.log('input 事件已触发');
               }, 1000);
-              
+
               console.log('内容填充完成');
               return true;
             } catch (err) {
@@ -493,18 +495,18 @@ export default defineBackground(() => {
           },
           args: [text]
         });
-        
+
         if (result?.result) {
           console.log(`输入框填充成功，尝试次数: ${i + 1}`);
           return true;
         }
-        
+
         await sleep(500);
       } catch (error) {
         console.error(`第 ${i + 1} 次尝试失败:`, error);
       }
     }
-    
+
     console.error('超时：未能填充输入框');
     return false;
   }

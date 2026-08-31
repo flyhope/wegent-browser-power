@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ref, h } from 'vue';
-import { NButton, NSpace, NIcon, useMessage } from 'naive-ui';
+import { NButton, NIcon, useMessage } from 'naive-ui';
 import { Chat, Code } from '@vicons/carbon';
 import { createWegentApiService } from '../../services/wegentApi';
 import type { ToolConfig } from '../../services/wegentApi';
@@ -56,7 +56,8 @@ const handleExportAndOpen = async (pageType: 'chat' | 'code') => {
     const rawContent = await props.getBusinessData();
     const content = buildContent(props.aiConfig.promptTemplate, rawContent);
     const wegentBaseUrl = (wegentApi as any)['baseUrl'];
-    const targetUrl = `${wegentBaseUrl}/${pageType}`;
+    const targetUrl =
+      pageType === 'chat' ? `${wegentBaseUrl}/chat` : `${wegentBaseUrl}/chat?agent=code`;
 
     console.log('准备打开页面:', targetUrl);
     console.log('内容长度:', content.length);
