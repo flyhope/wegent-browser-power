@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref, h } from 'vue';
 import { NButton, NIcon, useMessage } from 'naive-ui';
-import { Chat } from '@vicons/carbon';
+import { Chat, Code } from '@vicons/carbon';
 import { createWegentApiService } from '../../services/wegentApi';
 import type { ToolConfig } from '../../services/wegentApi';
 
@@ -25,6 +25,7 @@ const props = defineProps<Props>();
 
 const message = useMessage();
 const isChatLoading = ref(false);
+const isCodeLoading = ref(false);
 
 const renderIcon = (icon: any) => () => h(NIcon, null, { default: () => h(icon) });
 
@@ -38,8 +39,12 @@ const buildContent = (template: string, dataMap: Record<string, string>): string
   });
 };
 
-const handleExportAndOpen = async () => {
-  isChatLoading.value = true;
+const handleExportAndOpen = async (pageType: 'chat' | 'code') => {
+  if (pageType === 'chat') {
+    isChatLoading.value = true;
+  } else {
+    isCodeLoading.value = true;
+  }
 
   try {
     const wegentApi = await createWegentApiService();
@@ -51,7 +56,8 @@ const handleExportAndOpen = async () => {
     const rawContent = await props.getBusinessData();
     const content = buildContent(props.aiConfig.promptTemplate, rawContent);
     const wegentBaseUrl = (wegentApi as any)['baseUrl'];
-    const targetUrl = `${wegentBaseUrl}/chat`;
+    const targetUrl =
+      pageType === 'chat' ? `${wegentBaseUrl}/chat` : `${wegentBaseUrl}/chat?agent=code`;
 
     console.log('准备打开页面:', targetUrl);
     console.log('内容长度:', content.length);
@@ -61,7 +67,7 @@ const handleExportAndOpen = async () => {
       (openResponse) => {
         console.log('打开页面响应:', openResponse);
         if (openResponse?.success) {
-          message.success('对话页面已打开');
+          message.success(`${pageType === 'chat' ? '对话' : '编码'}页面已打开`);
         } else {
           message.error('打开页面失败: ' + (openResponse?.error || '未知错误'));
         }
@@ -72,6 +78,7 @@ const handleExportAndOpen = async () => {
     message.error(`操作失败: ${error instanceof Error ? error.message : '未知错误'}`);
   } finally {
     isChatLoading.value = false;
+    isCodeLoading.value = false;
   }
 };
 </script>
@@ -84,11 +91,23 @@ const handleExportAndOpen = async () => {
       size="large"
       block
       :loading="isChatLoading"
-      :disabled="isChatLoading"
+      :disabled="isChatLoading || isCodeLoading"
       :render-icon="renderIcon(Chat)"
-      @click="handleExportAndOpen()"
+      @click="handleExportAndOpen('chat')"
     >
       对话
+    </NButton>
+    <NButton
+      secondary
+      type="info"
+      size="large"
+      block
+      :loading="isCodeLoading"
+      :disabled="isChatLoading || isCodeLoading"
+      :render-icon="renderIcon(Code)"
+      @click="handleExportAndOpen('code')"
+    >
+      编码
     </NButton>
   </div>
 </template>
