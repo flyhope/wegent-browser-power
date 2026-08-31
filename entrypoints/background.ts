@@ -449,8 +449,8 @@ export default defineBackground(() => {
   }
 
   // 辅助函数：等待并填充消息输入框
-  // 输入框查找与写入逻辑封装在注入函数内（自包含，注入到目标页执行）
-  // 兼容新版 wegent 原生 textarea / contenteditable 富文本 / 历史版 data-testid 三种 DOM
+  // 与 1.0.22 保持一致：定位 [data-testid="message-input"]，innerText 写入，
+  // 延迟 1s 后派发 input 事件通知 React 更新内部 state
   async function waitForAndFillMessageInput(tabId: number, text: string, maxAttempts = 30) {
     console.log('开始等待消息输入框出现');
 
@@ -462,44 +462,30 @@ export default defineBackground(() => {
           target: { tabId },
           func: (content: string) => {
             try {
-              const findInputEl = (): HTMLElement | null => {
-                const textarea = document.querySelector<HTMLTextAreaElement>('textarea');
-                if (textarea) return textarea;
-                const editable = document.querySelector<HTMLElement>('[contenteditable="true"]');
-                if (editable) return editable;
-                const legacy = document.querySelector<HTMLElement>('[data-testid="message-input"]');
-                if (legacy) return legacy;
-                return null;
-              };
+              // 查找输入框元素
+              const inputEl = document.querySelector('[data-testid="message-input"]');
 
-              const writeContent = (el: HTMLElement, val: string): boolean => {
-                el.focus();
-                if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
-                  const proto = el instanceof HTMLTextAreaElement
-                    ? HTMLTextAreaElement.prototype
-                    : HTMLInputElement.prototype;
-                  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-                  if (setter) {
-                    setter.call(el, val);
-                  } else {
-                    (el as HTMLTextAreaElement).value = val;
-                  }
-                  el.dispatchEvent(new Event('input', { bubbles: true }));
-                  return true;
-                }
-                el.innerText = val;
-                el.dispatchEvent(new InputEvent('input', { bubbles: true, data: val, inputType: 'insertText' }));
-                return true;
-              };
-
-              const inputEl = findInputEl();
               if (!inputEl) {
                 console.log('未找到输入框');
                 return false;
               }
 
               console.log('找到输入框，开始填充内容');
-              writeContent(inputEl, content);
+
+              // 聚焦输入框
+              (inputEl as HTMLElement).focus();
+
+              // 修改内容
+              (inputEl as HTMLElement).innerText = content;
+
+              // 使用 setTimeout 确保渲染完成后再触发 input 事件
+              setTimeout(() => {
+                // 触发 input 事件通知 React 更新内部 state
+                const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+                inputEl.dispatchEvent(inputEvent);
+                console.log('input 事件已触发');
+              }, 1000);
+
               console.log('内容填充完成');
               return true;
             } catch (err) {
