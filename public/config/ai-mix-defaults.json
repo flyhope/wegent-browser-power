@@ -19,6 +19,46 @@
       }
     ]
   },
+  "gitLabMR": {
+    "actions": [
+      {
+        "type": "input",
+        "aiConfig": {
+          "promptTemplate": "{mrTitle}\n{mrUrl}"
+        }
+      }
+    ]
+  },
+  "gitLabTestReport": {
+    "actions": [
+      {
+        "type": "input",
+        "aiConfig": {
+          "promptTemplate": "{url}"
+        }
+      }
+    ]
+  },
+  "gitLabIssues": {
+    "actions": [
+      {
+        "type": "input",
+        "aiConfig": {
+          "promptTemplate": "{title}\n{url}"
+        }
+      }
+    ]
+  },
+  "gitLabPipelines": {
+    "actions": [
+      {
+        "type": "input",
+        "aiConfig": {
+          "promptTemplate": "{url}"
+        }
+      }
+    ]
+  },
   "jira": {
     "actions": [
       {
